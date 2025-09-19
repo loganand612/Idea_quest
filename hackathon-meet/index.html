@@ -1,36 +1,74 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Multi-way Video Call</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IdeaQuest Meet</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    video {
-      width: 30%;
-      margin: 5px;
-      border: 1px solid #ccc;
-    }
-    #remote-videos {
-      display: flex;
-      flex-wrap: wrap;
-    }
-    #engagementScore {
-      margin-top: 10px;
-      font-family: monospace;
-    }
-    #leaveBtn {
-      margin-top: 10px;
-      padding: 8px 16px;
-      font-size: 16px;
-    }
+    :root { color-scheme: light dark; }
+    html, body { height: 100%; }
+    body { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'; }
+    video { aspect-ratio: 16 / 9; background: #0b0f14; }
   </style>
 </head>
-<body>
-  <h1>Multi-Way Video Call</h1>
-  <video id="localVideo" autoplay playsinline muted></video>
-  <div id="remote-videos"></div>
-  <div id="engagementScore">Engagement: 0%</div>
-  <button id="leaveBtn">Leave Call</button>
+<body class="min-h-full bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+  <div class="flex flex-col h-dvh">
+    <header class="border-b border-slate-200/60 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur supports-[backdrop-filter]:bg-white/50 sticky top-0 z-10">
+      <div class="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="size-8 rounded bg-sky-500 grid place-items-center text-white font-bold">IQ</div>
+          <h1 class="text-lg font-semibold tracking-tight">IdeaQuest Meet</h1>
+        </div>
+        <button id="leaveBtn" class="inline-flex items-center gap-2 rounded-md bg-rose-600 text-white px-4 py-2 text-sm font-medium shadow hover:bg-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-400 disabled:opacity-50 disabled:pointer-events-none">
+          Leave Call
+        </button>
+      </div>
+    </header>
 
-  <!-- Socket.IO -->
+    <main class="flex-1 mx-auto w-full max-w-6xl px-4 py-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <section class="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+        <div class="px-3 py-2 text-sm font-medium bg-slate-100 dark:bg-slate-800/60">You</div>
+        <div class="aspect-video bg-black">
+          <video id="localVideo" class="w-full h-full object-cover" autoplay playsinline muted></video>
+        </div>
+      </section>
+
+      <section class="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+        <div class="px-3 py-2 text-sm font-medium bg-slate-100 dark:bg-slate-800/60">Peers</div>
+        <div id="remote-videos" class="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2 min-h-40 bg-black/60"></div>
+      </section>
+
+      <section class="md:col-span-2 grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="rounded-lg border border-slate-200 dark:border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-2">Stats</h2>
+          <div id="stats" class="text-xs font-mono leading-6 text-slate-700 dark:text-slate-300"></div>
+        </div>
+
+        <div class="rounded-lg border border-slate-200 dark:border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-2">Engagement</h2>
+          <div id="engagementScore" class="text-2xl font-semibold">Engagement: 0%</div>
+        </div>
+
+        <div class="rounded-lg border border-slate-200 dark:border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-2">Tips</h2>
+          <ul class="text-sm list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-300">
+            <li>Allow camera and microphone permissions</li>
+            <li>Open this page in another tab or device to connect</li>
+            <li>Use headphones to avoid echo</li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t border-slate-200/60 dark:border-slate-800 px-4 py-3 text-xs text-slate-500">
+      <div class="mx-auto max-w-6xl">WebRTC multi-peer • Socket.IO signaling • Face detection</div>
+    </footer>
+  </div>
+
   <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <script src="script.js"></script>
