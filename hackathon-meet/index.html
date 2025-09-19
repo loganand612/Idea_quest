@@ -1,14 +1,18 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Two-way Video Call</title>
+  <title>Multi-way Video Call</title>
   <style>
     video {
-      width: 45%;
+      width: 30%;
       margin: 5px;
       border: 1px solid #ccc;
     }
-    #stats {
+    #remote-videos {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    #engagementScore {
       margin-top: 10px;
       font-family: monospace;
     }
@@ -20,10 +24,9 @@
   </style>
 </head>
 <body>
-  <h1>Two-Way Video Call</h1>
+  <h1>Multi-Way Video Call</h1>
   <video id="localVideo" autoplay playsinline muted></video>
-  <video id="remoteVideo" autoplay playsinline muted></video>
-  <div id="stats"></div>
+  <div id="remote-videos"></div>
   <div id="engagementScore">Engagement: 0%</div>
   <button id="leaveBtn">Leave Call</button>
 
