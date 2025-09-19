@@ -8,11 +8,14 @@ const remoteVideo = document.getElementById("remoteVideo");
 const statsDiv = document.getElementById("stats");
 const leaveBtn = document.getElementById("leaveBtn");
 
+const remoteStream = new MediaStream();
+remoteVideo.srcObject = remoteStream;
+
 let localStream;
 let isCaller = false;
 let remoteSocketId = null;
 
-// Get local media and add tracks
+// Get local media
 async function initMedia() {
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -25,44 +28,35 @@ async function initMedia() {
 
 initMedia();
 
-// Handle incoming remote tracks
+// Handle remote tracks
 peerConnection.ontrack = event => {
-  console.log("Received remote track event:", event);
-  if (event.streams && event.streams[0]) {
-    console.log("Setting remote video srcObject");
-    remoteVideo.srcObject = event.streams[0];
-  } else {
-    console.warn("No streams found in ontrack event");
-  }
+  remoteStream.addTrack(event.track);
 };
 
-// Send ICE candidates to remote peer
+// ICE candidates
 peerConnection.onicecandidate = event => {
   if (event.candidate && remoteSocketId) {
     socket.emit("ice-candidate", { candidate: event.candidate, socketId: remoteSocketId });
   }
 };
 
-// Socket events
-
+// Socket.IO events
 socket.on("connect", () => {
   console.log("Connected with ID:", socket.id);
-  socket.emit("ready"); // notify server we are ready
+  socket.emit("ready");
 });
 
-socket.on("start-call", (data) => {
-  console.log("Received start-call:", data);
+socket.on("start-call", data => {
   remoteSocketId = data.remoteId;
-  isCaller = true; // The server has designated this client as the caller
-  startCall();
+  isCaller = data.isCaller;
+  if (isCaller) {
+    startCall();
+  }
 });
 
-socket.on("wait", () => {
-  console.log("Waiting for another peer...");
-});
+socket.on("wait", () => console.log("Waiting for another peer..."));
 
 socket.on("offer", async data => {
-  console.log("Received offer:", data);
   remoteSocketId = data.socketId;
   await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
   const answer = await peerConnection.createAnswer();
@@ -71,12 +65,10 @@ socket.on("offer", async data => {
 });
 
 socket.on("answer", async data => {
-  console.log("Received answer:", data);
   await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
 });
 
 socket.on("ice-candidate", async data => {
-  console.log("Received ICE candidate:", data);
   try {
     await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
   } catch (err) {

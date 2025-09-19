@@ -14,8 +14,8 @@ io.on("connection", (socket) => {
   socket.on("ready", () => {
     if (waitingClient) {
       // Pair with the waiting client
-      socket.emit("start-call", { remoteId: waitingClient });
-      io.to(waitingClient).emit("start-call", { remoteId: socket.id });
+      socket.emit("start-call", { remoteId: waitingClient, isCaller: true });
+      io.to(waitingClient).emit("start-call", { remoteId: socket.id, isCaller: false });
       waitingClient = null; // Reset for the next pair
     } else {
       // Wait for another client
