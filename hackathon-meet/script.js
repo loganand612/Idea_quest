@@ -1,46 +1,72 @@
 const socket = io("http://localhost:5000");
-const pc = new RTCPeerConnection();
+const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
 
-// Video elements
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 const statsDiv = document.getElementById("stats");
+const leaveBtn = document.getElementById("leaveBtn");
 
-// Get local stream
-navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
-  localVideo.srcObject = stream;
-  stream.getTracks().forEach(track => pc.addTrack(track, stream));
-});
+let localStream;
+let remoteSocketId = null;
 
-// Remote stream
-pc.ontrack = event => remoteVideo.srcObject = event.streams[0];
+// Initialize local media
+async function initMedia() {
+  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  localVideo.srcObject = localStream;
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+  socket.emit("ready"); // notify server we are ready
+}
+initMedia();
+
+// Remote tracks
+pc.ontrack = event => { remoteVideo.srcObject = event.streams[0]; };
 
 // ICE candidates
-pc.onicecandidate = event => {
-  if (event.candidate) socket.emit("ice-candidate", { candidate: event.candidate, socketId: remoteSocketId });
+pc.onicecandidate = e => {
+  if (e.candidate && remoteSocketId) {
+    socket.emit("ice-candidate", { candidate: e.candidate, socketId: remoteSocketId });
+  }
 };
 
-// Offer/answer handling via Socket.IO
+// Get existing clients
+socket.on("all-clients", data => {
+  if (data.clients.length > 0) {
+    remoteSocketId = data.clients[0]; // pick the first peer
+    startCall();
+  }
+});
+
+// New peer joined
+socket.on("new-peer", data => {
+  if (!remoteSocketId) {
+    remoteSocketId = data.socketId;
+    startCall();
+  }
+});
+
+// Receive offer
 socket.on("offer", async data => {
+  remoteSocketId = data.socketId;
   await pc.setRemoteDescription(data.offer);
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-  socket.emit("answer", { answer, socketId: data.socketId });
+  socket.emit("answer", { answer, socketId: remoteSocketId });
 });
 
-socket.on("answer", async data => await pc.setRemoteDescription(data.answer));
-socket.on("ice-candidate", async data => await pc.addIceCandidate(data.candidate));
+// Receive answer
+socket.on("answer", async data => {
+  await pc.setRemoteDescription(data.answer);
+});
 
-// Stats panel (frontend)
-setInterval(async () => {
-  if (!pc) return;
-  const stats = await pc.getStats();
-  let statsText = '';
-  stats.forEach(report => {
-    if (report.type === 'inbound-rtp' && report.kind === 'video') {
-      statsText += `Bitrate: ${Math.round(report.bitrateMean/1000)} kbps<br>`;
-      statsText += `Packet Loss: ${report.packetsLost}<br>`;
-    }
-  });
-  statsDiv.innerHTML = statsText;
-}, 1000);
+// Receive ICE candidates
+socket.on("ice-candidate", async data => {
+  await pc.addIceCandidate(data.candidate);
+});
+
+// Start call
+async function startCall() {
+  if (!remoteSocketId || !localStream) return;
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  socket.emit("offer", { offer, socketId: remoteSocketId });
+}

@@ -9,10 +9,12 @@ const io = socketIo(server, { cors: { origin: "*" } });
 io.on("connection", (socket) => {
   console.log(`Client connected: ${socket.id}`);
 
-  socket.on("ready", () => {
-    // Notify other clients a new peer is ready
-    socket.broadcast.emit("new-peer");
-  });
+  // Send existing clients to new client
+  const otherClients = Array.from(io.sockets.sockets.keys()).filter(id => id !== socket.id);
+  socket.emit("all-clients", { clients: otherClients });
+
+  // Notify all other clients that a new peer joined
+  socket.broadcast.emit("new-peer", { socketId: socket.id });
 
   socket.on("offer", (data) => {
     socket.to(data.socketId).emit("offer", { offer: data.offer, socketId: socket.id });

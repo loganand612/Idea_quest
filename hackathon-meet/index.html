@@ -1,13 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Two-way Call</title>
+  <title>Two-way Video Call</title>
+  <style>
+    video {
+      width: 45%;
+      margin: 5px;
+      border: 1px solid #ccc;
+    }
+    #stats {
+      margin-top: 10px;
+      font-family: monospace;
+    }
+    #leaveBtn {
+      margin-top: 10px;
+      padding: 8px 16px;
+      font-size: 16px;
+    }
+  </style>
 </head>
 <body>
   <h1>Two-Way Video Call</h1>
   <video id="localVideo" autoplay playsinline muted></video>
   <video id="remoteVideo" autoplay playsinline></video>
+  <div id="stats"></div>
+  <button id="leaveBtn">Leave Call</button>
 
+  <!-- Socket.IO -->
   <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
   <script>
     const socket = io("http://localhost:5000");
@@ -17,39 +36,54 @@
 
     const localVideo = document.getElementById("localVideo");
     const remoteVideo = document.getElementById("remoteVideo");
+    const statsDiv = document.getElementById("stats");
+    const leaveBtn = document.getElementById("leaveBtn");
 
     let localStream;
     let isCaller = false;
     let remoteSocketId = null;
 
-    // Get local media and add tracks to peer connection
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      .then(stream => {
-        localVideo.srcObject = stream;
-        localStream = stream;
-        stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
-      })
-      .catch(error => console.error("Error accessing media devices.", error));
+    // Get local media and add tracks
+    async function initMedia() {
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localVideo.srcObject = localStream;
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+      } catch (err) {
+        console.error("Error accessing media devices:", err);
+      }
+    }
+
+    initMedia();
 
     // Handle incoming remote tracks
     peerConnection.ontrack = event => {
       remoteVideo.srcObject = event.streams[0];
     };
 
-    // Send ICE candidates to the remote peer via signaling server
+    // Send ICE candidates to remote peer
     peerConnection.onicecandidate = event => {
       if (event.candidate && remoteSocketId) {
         socket.emit("ice-candidate", { candidate: event.candidate, socketId: remoteSocketId });
       }
     };
 
-    // Handle new client connections - assign caller/callee roles
+    // Socket events
     socket.on("connect", () => {
       console.log("Connected with ID:", socket.id);
+      socket.emit("ready"); // notify server we are ready
     });
 
-    // Receive offer from remote peer
-    socket.on("offer", async (data) => {
+    socket.on("new-peer", (data) => {
+      // When a new peer joins, assign their socket ID
+      if (!remoteSocketId) remoteSocketId = data.socketId;
+      if (!isCaller) {
+        isCaller = true;
+        startCall();
+      }
+    });
+
+    socket.on("offer", async data => {
       remoteSocketId = data.socketId;
       await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
       const answer = await peerConnection.createAnswer();
@@ -57,38 +91,48 @@
       socket.emit("answer", { answer, socketId: remoteSocketId });
     });
 
-    // Receive answer from remote peer
-    socket.on("answer", async (data) => {
+    socket.on("answer", async data => {
       await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
     });
 
-    // Receive ICE candidate from remote peer
-    socket.on("ice-candidate", async (data) => {
+    socket.on("ice-candidate", async data => {
       try {
         await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
       } catch (err) {
-        console.error("Error adding received ice candidate", err);
+        console.error("Error adding ICE candidate:", err);
       }
     });
 
-    // After both clients connected, one starts the call as caller
-    socket.on("new-peer", () => {
-      if (!isCaller) {
-        isCaller = true;
-        startCall();
-      }
-    });
-
-    // Notify server we are ready to start signaling
-    socket.emit("ready");
-
+    // Start call as caller
     async function startCall() {
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
       socket.emit("offer", { offer, socketId: remoteSocketId });
     }
-  </script>
-  <button id="leaveBtn">Leave Call</button>
 
+    // Stats panel
+    setInterval(async () => {
+      if (!peerConnection) return;
+      const stats = await peerConnection.getStats();
+      let statsText = '';
+      stats.forEach(report => {
+        if (report.type === 'inbound-rtp' && report.kind === 'video') {
+          if (report.bitrateMean !== undefined) statsText += `Bitrate: ${Math.round(report.bitrateMean/1000)} kbps<br>`;
+          statsText += `Packet Loss: ${report.packetsLost || 0}<br>`;
+        }
+      });
+      statsDiv.innerHTML = statsText;
+    }, 1000);
+
+    // Leave button
+    leaveBtn.onclick = () => {
+      if (localStream) localStream.getTracks().forEach(track => track.stop());
+      if (peerConnection) peerConnection.close();
+      remoteVideo.srcObject = null;
+      localVideo.srcObject = null;
+      socket.disconnect();
+      console.log("Call ended");
+    };
+  </script>
 </body>
 </html>
