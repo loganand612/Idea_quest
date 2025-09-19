@@ -11,6 +11,7 @@ peerConnection.oniceconnectionstatechange = () => {
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 const statsDiv = document.getElementById("stats");
+const engagementDiv = document.getElementById("engagementScore");
 const leaveBtn = document.getElementById("leaveBtn");
 
 const remoteStream = new MediaStream();
@@ -19,6 +20,13 @@ remoteVideo.srcObject = remoteStream;
 let localStream;
 let isCaller = false;
 let remoteSocketId = null;
+
+// Load face-api.js models
+async function loadFaceAPI() {
+  console.log("Loading face-api models...");
+  await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+  console.log("Models loaded.");
+}
 
 // Get local media
 async function initMedia() {
@@ -41,7 +49,29 @@ async function initMedia() {
   }
 }
 
-initMedia();
+// Face detection
+async function detectFace() {
+    if (!localStream || !localVideo.srcObject || localVideo.paused || localVideo.ended || !faceapi.nets.tinyFaceDetector.params) {
+        return;
+    }
+
+    const detections = await faceapi.detectAllFaces(localVideo, new faceapi.TinyFaceDetectorOptions());
+
+    if (detections.length > 0) {
+        const engagement = (detections[0].score * 100).toFixed(2);
+        engagementDiv.innerText = `Engagement: ${engagement}%`;
+    } else {
+        engagementDiv.innerText = "Engagement: 0%";
+    }
+}
+
+async function main() {
+    await loadFaceAPI();
+    await initMedia();
+    setInterval(detectFace, 1000);
+}
+
+main();
 
 
 // Handle remote tracks
@@ -85,7 +115,7 @@ socket.on("offer", async data => {
   console.log("Set remote description from offer.");
   const answer = await peerConnection.createAnswer();
   console.log("Created answer.");
-await peerConnection.setLocalDescription(answer);
+  await peerConnection.setLocalDescription(answer);
   console.log("Set local description from answer.");
   socket.emit("answer", { answer, socketId: remoteSocketId });
   console.log("Sent answer.");
