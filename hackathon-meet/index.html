@@ -22,17 +22,12 @@
 <body>
   <h1>Two-Way Video Call</h1>
   <video id="localVideo" autoplay playsinline muted></video>
-  <video id="remoteVideo" autoplay playsinline></video>
+  <video id="remoteVideo" autoplay playsinline muted></video>
   <div id="stats"></div>
-  <div id="engagementScore">Engagement: 0%</div>
   <button id="leaveBtn">Leave Call</button>
 
   <!-- Socket.IO -->
   <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
-  <!-- Face-api.js -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
-  <script src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

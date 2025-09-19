@@ -8,6 +8,7 @@ const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: "*" } });
 
 app.use(express.static(path.join(__dirname)));
+app.use('/models', express.static(path.join(__dirname, 'models')));
 
 let waitingClient = null;
 
@@ -47,7 +48,7 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = 3001;
+const PORT = 3002;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
