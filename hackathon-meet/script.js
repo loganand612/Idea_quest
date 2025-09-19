@@ -1,4 +1,4 @@
-const socket = io("http://localhost:5000");
+const socket = io("http://localhost:3001");
 const peerConnection = new RTCPeerConnection({
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
 });
@@ -6,6 +6,7 @@ const peerConnection = new RTCPeerConnection({
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 const statsDiv = document.getElementById("stats");
+const engagementDiv = document.getElementById("engagementScore");
 const leaveBtn = document.getElementById("leaveBtn");
 
 const remoteStream = new MediaStream();
@@ -14,6 +15,12 @@ remoteVideo.srcObject = remoteStream;
 let localStream;
 let isCaller = false;
 let remoteSocketId = null;
+
+// Load face-api.js models
+async function loadFaceAPI() {
+  await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+  await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+}
 
 // Get local media
 async function initMedia() {
@@ -26,7 +33,23 @@ async function initMedia() {
   }
 }
 
-initMedia();
+// Face detection
+async function detectFace() {
+    if (!localStream || !localVideo.srcObject) return;
+
+    const detections = await faceapi.detectAllFaces(localVideo, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+
+    if (detections.length > 0) {
+        const engagement = (detections[0].detection.score * 100).toFixed(2);
+        engagementDiv.innerText = `Engagement: ${engagement}%`;
+    } else {
+        engagementDiv.innerText = "Engagement: 0%";
+    }
+}
+
+
+loadFaceAPI().then(initMedia);
+
 
 // Handle remote tracks
 peerConnection.ontrack = event => {
@@ -96,6 +119,9 @@ setInterval(async () => {
   });
   statsDiv.innerHTML = statsText;
 }, 1000);
+
+// Face detection interval
+setInterval(detectFace, 1000);
 
 // Leave button
 leaveBtn.onclick = () => {

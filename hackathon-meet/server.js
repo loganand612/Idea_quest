@@ -1,21 +1,53 @@
-const express = require('express');
-const path = require('path');
+const express = require("express");
+const http = require("http");
+const socketIo = require("socket.io");
+const path = require("path");
 
 const app = express();
-const PORT = 3000;
+const server = http.createServer(app);
+const io = socketIo(server, { cors: { origin: "*" } });
 
-const staticDir = path.resolve(__dirname);
+app.use(express.static(path.join(__dirname)));
 
-console.log('Serving static files from:', staticDir);
-console.log('Current working directory:', process.cwd());
+let waitingClient = null;
 
-// Serve static files from the hackathon-meet directory
-app.use(express.static(staticDir));
+io.on("connection", (socket) => {
+  console.log(`Client connected: ${socket.id}`);
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(staticDir, 'index.html'));
+  socket.on("ready", () => {
+    if (waitingClient) {
+      // Pair with the waiting client
+      socket.emit("start-call", { remoteId: waitingClient, isCaller: true });
+      io.to(waitingClient).emit("start-call", { remoteId: socket.id, isCaller: false });
+      waitingClient = null; // Reset for the next pair
+    } else {
+      // Wait for another client
+      waitingClient = socket.id;
+      socket.emit("wait");
+    }
+  });
+
+  socket.on("offer", (data) => {
+    socket.to(data.socketId).emit("offer", { offer: data.offer, socketId: socket.id });
+  });
+
+  socket.on("answer", (data) => {
+    socket.to(data.socketId).emit("answer", { answer: data.answer, socketId: socket.id });
+  });
+
+  socket.on("ice-candidate", (data) => {
+    socket.to(data.socketId).emit("ice-candidate", { candidate: data.candidate, socketId: socket.id });
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`Client disconnected: ${socket.id}`);
+    if (waitingClient === socket.id) {
+      waitingClient = null;
+    }
+  });
 });
 
-app.listen(PORT, () => {
-  console.log(`Static server running at http://localhost:${PORT}`);
+const PORT = 3001;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
