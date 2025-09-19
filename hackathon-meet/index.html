@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Two-way Call</title>
+</head>
+<body>
+  <h1>Two-Way Video Call</h1>
+  <video id="localVideo" autoplay playsinline muted></video>
+  <video id="remoteVideo" autoplay playsinline></video>
+
+  <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+  <script>
+    const socket = io("http://localhost:5000");
+    const peerConnection = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    });
+
+    const localVideo = document.getElementById("localVideo");
+    const remoteVideo = document.getElementById("remoteVideo");
+
+    let localStream;
+    let isCaller = false;
+    let remoteSocketId = null;
+
+    // Get local media and add tracks to peer connection
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      .then(stream => {
+        localVideo.srcObject = stream;
+        localStream = stream;
+        stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+      })
+      .catch(error => console.error("Error accessing media devices.", error));
+
+    // Handle incoming remote tracks
+    peerConnection.ontrack = event => {
+      remoteVideo.srcObject = event.streams[0];
+    };
+
+    // Send ICE candidates to the remote peer via signaling server
+    peerConnection.onicecandidate = event => {
+      if (event.candidate && remoteSocketId) {
+        socket.emit("ice-candidate", { candidate: event.candidate, socketId: remoteSocketId });
+      }
+    };
+
+    // Handle new client connections - assign caller/callee roles
+    socket.on("connect", () => {
+      console.log("Connected with ID:", socket.id);
+    });
+
+    // Receive offer from remote peer
+    socket.on("offer", async (data) => {
+      remoteSocketId = data.socketId;
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      socket.emit("answer", { answer, socketId: remoteSocketId });
+    });
+
+    // Receive answer from remote peer
+    socket.on("answer", async (data) => {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    });
+
+    // Receive ICE candidate from remote peer
+    socket.on("ice-candidate", async (data) => {
+      try {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+      } catch (err) {
+        console.error("Error adding received ice candidate", err);
+      }
+    });
+
+    // After both clients connected, one starts the call as caller
+    socket.on("new-peer", () => {
+      if (!isCaller) {
+        isCaller = true;
+        startCall();
+      }
+    });
+
+    // Notify server we are ready to start signaling
+    socket.emit("ready");
+
+    async function startCall() {
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      socket.emit("offer", { offer, socketId: remoteSocketId });
+    }
+  </script>
+  <button id="leaveBtn">Leave Call</button>
+
+</body>
+</html>
