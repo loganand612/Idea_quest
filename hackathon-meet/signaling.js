@@ -6,15 +6,23 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: "*" } });
 
+let waitingClient = null;
+
 io.on("connection", (socket) => {
   console.log(`Client connected: ${socket.id}`);
 
-  // Send existing clients to new client
-  const otherClients = Array.from(io.sockets.sockets.keys()).filter(id => id !== socket.id);
-  socket.emit("all-clients", { clients: otherClients });
-
-  // Notify all other clients that a new peer joined
-  socket.broadcast.emit("new-peer", { socketId: socket.id });
+  socket.on("ready", () => {
+    if (waitingClient) {
+      // Pair with the waiting client
+      socket.emit("start-call", { remoteId: waitingClient });
+      io.to(waitingClient).emit("start-call", { remoteId: socket.id });
+      waitingClient = null; // Reset for the next pair
+    } else {
+      // Wait for another client
+      waitingClient = socket.id;
+      socket.emit("wait");
+    }
+  });
 
   socket.on("offer", (data) => {
     socket.to(data.socketId).emit("offer", { offer: data.offer, socketId: socket.id });
@@ -33,3 +41,7 @@ io.on("connection", (socket) => {
   });
 });
 
+const PORT = 5000;
+server.listen(PORT, () => {
+  console.log(`Signaling server running on port ${PORT}`);
+});
